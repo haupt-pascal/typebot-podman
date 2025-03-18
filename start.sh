@@ -1,6 +1,5 @@
 #!/bin/bash
 # Author: Pascal Haupt
-# Copyright (c) 2025 Profihost GmbH
 # Script to deploy Typebot using Podman
 
 # Error handling

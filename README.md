@@ -193,7 +193,6 @@ When reporting issues, please include:
 ## License
 
 This project is licensed under proprietary terms.
-Copyright (c) 2025 Profihost GmbH
 
 ## Acknowledgements
 

@@ -1,5 +1,4 @@
 # Author: Pascal Haupt
-# Copyright (c) 2025 Profihost GmbH
 # Configuration for deploying Typebot with Podman or Docker Compose
 # Includes PostgreSQL database, Redis cache, and Typebot builder/viewer services
 

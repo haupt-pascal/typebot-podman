@@ -1,6 +1,5 @@
 #!/bin/bash
 # Author: Pascal Haupt
-# Copyright (c) 2025 Profihost GmbH
 # Script to stop the Typebot pod using Podman
 
 echo "Stopping Typebot stack..."
