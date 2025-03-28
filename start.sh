@@ -1,79 +1,49 @@
 #!/bin/bash
-# Author: Pascal Haupt
-# Script to deploy Typebot using Podman
 
-# Error handling
-set -e  # Exit immediately if a command exits with a non-zero status
-trap 'echo "Error: Script execution failed"; exit 1' ERR
+podman stop typebot-db typebot-redis typebot-builder typebot-viewer || true
+podman rm typebot-db typebot-redis typebot-builder typebot-viewer || true
 
-# Check if .env file exists
-if [ ! -f .env ]; then
-    echo "Error: .env file not found. Please create it before running this script."
-    exit 1
-fi
+podman network create typebot-network || true
 
-# Create the pod if it doesn't exist
-if ! podman pod exists typebot-pod; then
-    echo "Creating typebot pod..."
-    podman pod create --name typebot-pod -p 8080:3000 -p 8081:3000
-fi
-
-echo "Starting PostgreSQL database..."
-if ! podman run -d --pod typebot-pod \
-  --name typebot-db \
-  -v ./volumes/db-data:/var/lib/postgresql/data:Z \
+# Datenbank
+podman run -d --name typebot-db \
+  --network typebot-network \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_DB=typebot \
   -e POSTGRES_PASSWORD=typebot \
-  postgres:16 postgres -c 'listen_addresses=*'; then
-    echo "Error: Failed to start PostgreSQL database"
-    exit 1
-fi
+  -v db-data:/var/lib/postgresql/data \
+  -p 5432:5432 \
+  postgres:16 postgres -c 'listen_addresses=*'
 
-# Wait for PostgreSQL to be ready
-echo "Waiting for PostgreSQL..."
+# Redis
+podman run -d --name typebot-redis \
+  --network typebot-network \
+  -v redis-data:/data \
+  -v ./volumes/redis-data:/data \
+  -p 6379:6379 \
+  redis:alpine --save 60 1 --loglevel warning
+
+echo "Warte 5 Sekunden, bis Datenbank und Redis vollständig gestartet sind..."
 sleep 5
 
-echo "Starting Redis..."
-if ! podman run -d --pod typebot-pod \
-  --name typebot-redis \
-  -v ./volumes/redis-data:/data:Z \
-  redis:alpine --save 60 1 --loglevel warning; then
-    echo "Error: Failed to start Redis"
-    exit 1
-fi
-
-sleep 3
-
-source .env
-
-echo "Starting Typebot Builder..."
-if ! podman run -d --pod typebot-pod \
-  --name typebot-builder \
+# Builder
+podman run -d --name typebot-builder \
+  --network typebot-network \
   --env-file .env \
-  -e REDIS_URL=redis://127.0.0.1:6379 \
-  baptistearno/typebot-builder:latest; then
-    echo "Error: Failed to start Typebot Builder"
-    exit 1
-fi
+  -e REDIS_URL=redis://typebot-redis:6379 \
+  -e DATABASE_URL=postgresql://postgres:typebot@typebot-db:5432/typebot \
+  -p 8080:3000 \
+  baptistearno/typebot-builder:latest
 
-echo "Starting Typebot Viewer..."
-if ! podman run -d --pod typebot-pod \
-  --name typebot-viewer \
+# Viewer
+podman run -d --name typebot-viewer \
+  --network typebot-network \
   --env-file .env \
-  -e REDIS_URL=redis://127.0.0.1:6379 \
-  baptistearno/typebot-viewer:latest; then
-    echo "Error: Failed to start Typebot Viewer"
-    exit 1
-fi
+  -e REDIS_URL=redis://typebot-redis:6379 \
+  -e DATABASE_URL=postgresql://postgres:typebot@typebot-db:5432/typebot \
+  -p 8081:3000 \
+  baptistearno/typebot-viewer:latest
 
-# Print success message and access information
-echo "Typebot stack has been successfully started!"
-echo "Builder is accessible at: http://localhost:8080"
-echo "Viewer is accessible at: http://localhost:8081"
-echo ""
-echo "Container status:"
-podman pod ps
-podman ps -a --pod
-
-echo "Setup completed."
+echo "Typebot wurde gestartet!"
+echo "Builder: http://localhost:8080"
+echo "Viewer: http://localhost:8081"
